@@ -1,4 +1,4 @@
-const CACHE_NAME = 'einkaufs-v1.5.5';
+const CACHE_NAME = 'einkaufs-v1.5.7';
 const ASSETS = [
   './',
   './index.php',

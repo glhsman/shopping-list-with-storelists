@@ -1,6 +1,6 @@
 <?php
 /**
- * Einkaufs-App - Automatisches Datenbank-Setup (v1.5.5)
+ * Einkaufs-App - Automatisches Datenbank-Setup (v1.5.7)
  * Initialisiert die Tabellen und sichert sich nach erfolgreichem Durchlauf selbst.
  */
 

@@ -1,5 +1,5 @@
 /**
- * Einkaufs-App Frontend Logic (Version 1.5.5 - Auto-Logout & MariaDB)
+ * Einkaufs-App Frontend Logic (Version 1.5.7 - Auto-Logout & MariaDB)
  */
 
 // --- Security: HTML Escaping helper ---
@@ -165,9 +165,48 @@ document.getElementById('submitQuickAdd')?.addEventListener('click', async () =>
 });
 
 pinDigits.forEach((digit, idx) => {
-    digit.addEventListener('keyup', (e) => {
-        if (e.key >= 0 && e.key <= 9) { if (idx < 5) pinDigits[idx + 1].focus(); }
-        else if (e.key === 'Backspace') { if (idx > 0) pinDigits[idx - 1].focus(); }
+    // Nur Ziffern zulassen und automatisch zum nächsten Feld springen
+    digit.addEventListener('input', (e) => {
+        let val = digit.value.replace(/\D/g, '');
+        if (val.length > 0) {
+            digit.value = val.charAt(0);
+            if (idx < 5) {
+                pinDigits[idx + 1].focus();
+            }
+        }
+    });
+
+    // Backspace-Logik zum Zurückspringen und Löschen
+    digit.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace') {
+            if (digit.value === '') {
+                if (idx > 0) {
+                    pinDigits[idx - 1].focus();
+                    pinDigits[idx - 1].value = '';
+                }
+            } else {
+                digit.value = '';
+            }
+            e.preventDefault();
+        }
+    });
+
+    // Einfügen einer kompletten PIN unterstützen
+    digit.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const pasteData = (e.clipboardData || window.clipboardData).getData('text');
+        const numbersOnly = pasteData.replace(/\D/g, '').substring(0, 6);
+        
+        for (let i = 0; i < numbersOnly.length; i++) {
+            if (pinDigits[i]) {
+                pinDigits[i].value = numbersOnly.charAt(i);
+            }
+        }
+        
+        const focusIndex = Math.min(numbersOnly.length, 5);
+        if (pinDigits[focusIndex]) {
+            pinDigits[focusIndex].focus();
+        }
     });
 });
 

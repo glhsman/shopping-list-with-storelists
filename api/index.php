@@ -127,6 +127,15 @@ try {
                 echo json_encode(['success' => false, 'error' => 'Gruppenname ist zu lang (max. 255 Zeichen)']);
                 break;
             }
+            
+            // Prüfen, ob PIN bereits vergeben ist
+            $stmt = $pdo->prepare("SELECT id FROM `groups` WHERE pin = :pin LIMIT 1");
+            $stmt->execute(['pin' => $pin]);
+            if ($stmt->fetch()) {
+                echo json_encode(['success' => false, 'error' => 'Diese PIN ist bereits vergeben. Bitte wähle eine andere.']);
+                break;
+            }
+
             // ID generieren: name-slug + random-number
             $slug = strtolower(preg_replace('/[^A-Za-z0-9-]+/', '-', $name));
             $id = $slug . '-' . rand(100, 999);
