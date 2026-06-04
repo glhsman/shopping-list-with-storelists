@@ -1,0 +1,28 @@
+# GitIgnore for Einkaufs-App
+
+# Directories
+node_modules/
+.vscode/
+.antigravity/
+.tmp/
+.agents
+assets/icons/tmp/
+
+# Github/Git meta
+.git/
+
+# Files
+.DS_Store
+GiitURL.md
+sync.ffs_db
+package-lock.json
+.agents
+.vscode
+
+# Session / Log data
+*.log
+*.swp
+*.tmp
+
+# Database Keys (Exposed keys should be ignored)
+.env

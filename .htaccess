@@ -1,0 +1,16 @@
+# 1. Verzeichnis-Listing deaktivieren (Directory Browsing)
+Options -Indexes
+
+# 2. Zugriff auf sensible Konfigurationsdateien und Versionsverwaltung blockieren
+<FilesMatch "^\.env|^\.git|database\.sql|verify_db\.php|db_check\.php">
+    <IfModule authz_core_module>
+        Require all denied
+    </IfModule>
+    <IfModule !authz_core_module>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# 3. UTF-8 Zeichensatz für alle Dokumente erzwingen
+AddDefaultCharset UTF-8

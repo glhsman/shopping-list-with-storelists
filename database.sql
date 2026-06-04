@@ -1,0 +1,50 @@
+-- 1. Tabellen erstellen
+
+CREATE TABLE IF NOT EXISTS `groups` (
+    `id` VARCHAR(100) PRIMARY KEY,
+    `pin` VARCHAR(10) NOT NULL,
+    `name` VARCHAR(255) NOT NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS `stores` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+    `name` VARCHAR(255) NOT NULL,
+    `group_id` VARCHAR(100) NOT NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (`group_id`) REFERENCES `groups` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS `items` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+    `name` VARCHAR(255) NOT NULL,
+    `category` VARCHAR(100) DEFAULT 'Allgemein',
+    `unit` VARCHAR(50) DEFAULT 'Stück',
+    `last_known_price` DECIMAL(10, 2) DEFAULT 0.00,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS `price_history` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+    `item_id` BIGINT NOT NULL,
+    `store_id` BIGINT DEFAULT NULL,
+    `price` DECIMAL(10, 2) NOT NULL,
+    `store_name` VARCHAR(255) DEFAULT NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (`item_id`) REFERENCES `items` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`store_id`) REFERENCES `stores` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS `shopping_list` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+    `item_id` BIGINT NOT NULL,
+    `group_id` VARCHAR(100) NOT NULL,
+    `quantity` INT DEFAULT 1,
+    `price` DECIMAL(10, 2) DEFAULT 0.00,
+    `is_checked` BOOLEAN DEFAULT FALSE,
+    `added_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `store_id` BIGINT DEFAULT NULL,
+    FOREIGN KEY (`item_id`) REFERENCES `items` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`group_id`) REFERENCES `groups` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`store_id`) REFERENCES `stores` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB;
