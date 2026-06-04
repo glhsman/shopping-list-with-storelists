@@ -27,3 +27,6 @@ package-lock.json
 # Database Keys (Exposed keys should be ignored)
 .env
 setup.lock
+import_data.sql
+import.lock
+csv-Export suprabase/
