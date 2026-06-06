@@ -1,5 +1,5 @@
 /**
- * Einkaufs-App Frontend Logic (Version 1.5.7 - Auto-Logout & MariaDB)
+ * Einkaufs-App Frontend Logic (Version 1.6.2 - Katalog+Liste filialbezogen, NULL-Store-Schutz)
  */
 
 // --- Security: HTML Escaping helper ---
@@ -94,6 +94,17 @@ document.getElementById('addStoreBtn')?.addEventListener('click', async () => {
 
 document.getElementById('openAddModal')?.addEventListener('click', () => {
     console.log('Standard listener trigger: openAddModal');
+
+    if (!activeStoreId) {
+        showToast('Bitte zuerst eine Filiale anlegen (Einstellungen → Filialen verwalten)');
+        const storesSection = document.getElementById('newStoreName');
+        if (storesSection) {
+            storesSection.focus();
+            storesSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return;
+    }
+
     const modal = document.getElementById('addModal');
     if (modal) {
         modal.classList.add('active');
@@ -101,7 +112,7 @@ document.getElementById('openAddModal')?.addEventListener('click', () => {
     } else {
         console.error('Modal element NOT found in standard listener!');
     }
-    
+
     const nameInput = document.getElementById('quickAddInput');
     if (nameInput) {
         setTimeout(() => {
@@ -109,7 +120,7 @@ document.getElementById('openAddModal')?.addEventListener('click', () => {
             console.log('Focus called on quickAddInput');
         }, 100);
     }
-    
+
     const priceInput = document.getElementById('itemPrice');
     if (priceInput) priceInput.value = '';
 });
@@ -135,6 +146,7 @@ document.getElementById('submitQuickAdd')?.addEventListener('click', async () =>
     const unit = unitInput.value;
 
     if (!name) return showToast('Bitte Name eingeben');
+    if (!activeStoreId) return showToast('Bitte zuerst Filiale auswählen');
 
     try {
         const res = await fetch('api/?action=add_item', {
@@ -144,7 +156,9 @@ document.getElementById('submitQuickAdd')?.addEventListener('click', async () =>
                 name, 
                 unit, 
                 category: 'Allgemein',
-                last_known_price: price 
+                last_known_price: price,
+                group_id: currentGroupId,
+                store_id: activeStoreId
             })
         });
         const data = await res.json();
@@ -158,9 +172,10 @@ document.getElementById('submitQuickAdd')?.addEventListener('click', async () =>
         
         refreshData();
         showToast('Gespeichert!');
-    } catch (err) { 
+    } catch (err) {
         console.error('Fehler beim Speichern:', err);
-        showToast('Speicherfehler'); 
+        const msg = (err && err.message) ? err.message : 'Unbekannter Fehler';
+        showToast('Fehler: ' + msg);
     }
 });
 
@@ -298,11 +313,20 @@ async function refreshData(search = '') {
         // Artikelliste alphabetisch sortieren, damit sie nicht springt (BigInt Fix)
         shoppingList.sort((a, b) => a.name.localeCompare(b.name));
 
-        // Katalog holen
-        const resCatalog = await fetch(`api/?action=get_catalog&search=${encodeURIComponent(search)}`);
-        const dataCatalog = await resCatalog.json();
-        if (!dataCatalog.success) throw new Error(dataCatalog.error);
-        catalog = dataCatalog.data || [];
+        // Katalog holen (gefiltert nach Gruppe + aktiver Filiale)
+        if (activeStoreId) {
+            const catalogParams = new URLSearchParams({
+                group_id: currentGroupId,
+                store_id: activeStoreId,
+                search: search
+            });
+            const resCatalog = await fetch(`api/?action=get_catalog&${catalogParams.toString()}`);
+            const dataCatalog = await resCatalog.json();
+            if (!dataCatalog.success) throw new Error(dataCatalog.error);
+            catalog = dataCatalog.data || [];
+        } else {
+            catalog = [];
+        }
 
         renderAll();
         calculateEstimate();
@@ -402,6 +426,10 @@ window.savePrice = async (id, price) => {
 };
 
 window.toggleInCatalog = async (itemId, currentlyOnList) => {
+    if (!activeStoreId) {
+        showToast('Bitte zuerst eine Filiale auswählen');
+        return;
+    }
     try {
         const res = await fetch('api/?action=toggle_in_catalog', {
             method: 'POST',
@@ -409,7 +437,7 @@ window.toggleInCatalog = async (itemId, currentlyOnList) => {
             body: JSON.stringify({
                 item_id: itemId,
                 group_id: currentGroupId,
-                store_id: activeStoreId || '',
+                store_id: activeStoreId,
                 currently_on_list: currentlyOnList
             })
         });
@@ -417,8 +445,9 @@ window.toggleInCatalog = async (itemId, currentlyOnList) => {
         if (!data.success) throw new Error(data.error);
 
         refreshData();
-    } catch (e) { 
-        showToast('Sync Fehler'); 
+    } catch (e) {
+        console.error('Toggle-Fehler:', e);
+        showToast('Fehler: ' + (e.message || 'Sync fehlgeschlagen'));
     }
 };
 
@@ -470,6 +499,8 @@ function loginAs(id, name) {
     currentGroupId = id;
     localStorage.setItem('groupId', id);
     localStorage.setItem('groupName', name);
+    activeStoreId = '';
+    localStorage.setItem('activeStoreId', '');
     checkAccess();
 }
 
@@ -547,6 +578,10 @@ function switchView(viewId) {
 
 function renderShoppingList() {
     if (!shoppingListContainer) return;
+    if (!activeStoreId) {
+        shoppingListContainer.innerHTML = `<div class="view-card glass" style="text-align: center; padding: 2rem;"><p style="color: var(--text-muted);">Bitte Filiale wählen, um deinen Korb zu sehen. 🏪</p></div>`;
+        return;
+    }
     if (shoppingList.length === 0) {
         shoppingListContainer.innerHTML = `<div class="view-card glass" style="text-align: center; padding: 2rem;"><p style="color: var(--text-muted);">Dein Korb ist hier leer. 🧺</p></div>`;
         return;
@@ -576,22 +611,34 @@ function renderShoppingList() {
 
 function renderCatalog() {
     if (!catalogContainer) return;
+    if (!activeStoreId) {
+        catalogContainer.innerHTML = `<div class="view-card glass" style="text-align: center; padding: 1.5rem;"><p style="color: var(--text-muted); font-size: 0.85rem;">Bitte Filiale wählen, um deinen Katalog zu sehen. 🏪</p></div>`;
+        return;
+    }
     const isOnList = (itemId) => shoppingList.some(s => String(s.item_id) === String(itemId));
-    catalogContainer.innerHTML = catalog.map(item => {
-        const active = isOnList(item.id);
-        return `
-            <div class="list-item glass ${active ? 'active-list' : ''}" onclick="toggleInCatalog(${item.id}, ${active})">
-                <div class="item-details">
-                    <div class="item-name" style="${active ? 'color: var(--primary);' : ''}">${escapeHTML(item.name)}</div>
-                    <div class="item-category">${escapeHTML(item.category)} • ${escapeHTML(item.unit)}${item.last_known_price > 0 ? ` • ${parseFloat(item.last_known_price).toFixed(2)} €` : ''}</div>
-                </div>
-                <div class="item-actions">
-                    <i class="fas fa-trash-can delete-item-icon" onclick="event.stopPropagation(); deleteItem(${item.id})"></i>
-                    <i class="fas ${active ? 'fa-minus-circle' : 'fa-plus-circle'}" style="color: ${active ? 'var(--danger)' : 'var(--primary)'}; font-size: 1.25rem;"></i>
-                </div>
+    const availableItems = catalog.filter(item => !isOnList(item.id));
+
+    if (availableItems.length === 0) {
+        if (catalog.length === 0) {
+            catalogContainer.innerHTML = `<div class="view-card glass" style="text-align: center; padding: 1.5rem;"><p style="color: var(--text-muted); font-size: 0.85rem;">Keine Artikel in dieser Filiale. Lege welche an! ➕</p></div>`;
+        } else {
+            catalogContainer.innerHTML = `<div class="view-card glass" style="text-align: center; padding: 1.5rem;"><p style="color: var(--text-muted); font-size: 0.85rem;">Alle Katalogartikel sind auf der Liste. 📋</p></div>`;
+        }
+        return;
+    }
+
+    catalogContainer.innerHTML = availableItems.map(item => `
+        <div class="list-item glass" onclick="toggleInCatalog(${item.id}, false)">
+            <div class="item-details">
+                <div class="item-name">${escapeHTML(item.name)}</div>
+                <div class="item-category">${escapeHTML(item.category)} • ${escapeHTML(item.unit)}${item.last_known_price > 0 ? ` • ${parseFloat(item.last_known_price).toFixed(2)} €` : ''}</div>
             </div>
-        `;
-    }).join('');
+            <div class="item-actions">
+                <i class="fas fa-trash-can delete-item-icon" onclick="event.stopPropagation(); deleteItem(${item.id})"></i>
+                <i class="fas fa-plus-circle" style="color: var(--primary); font-size: 1.25rem;"></i>
+            </div>
+        </div>
+    `).join('');
 }
 
 window.deleteItem = async (id) => {
@@ -616,6 +663,11 @@ window.deleteItem = async (id) => {
 
 function renderStoreSelector() {
     if (!activeStoreSelect) return;
+    const validIds = stores.map(s => String(s.id));
+    if (activeStoreId && !validIds.includes(String(activeStoreId))) {
+        activeStoreId = '';
+        localStorage.setItem('activeStoreId', '');
+    }
     const options = stores.map(s => `<option value="${s.id}" ${String(s.id) === String(activeStoreId) ? 'selected' : ''}>${escapeHTML(s.name)}</option>`).join('');
     activeStoreSelect.innerHTML = `<option value="">🛒 Filiale wählen...</option>` + options;
 }

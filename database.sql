@@ -21,7 +21,12 @@ CREATE TABLE IF NOT EXISTS `items` (
     `category` VARCHAR(100) DEFAULT 'Allgemein',
     `unit` VARCHAR(50) DEFAULT 'Stück',
     `last_known_price` DECIMAL(10, 2) DEFAULT 0.00,
-    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `group_id` VARCHAR(100) NOT NULL,
+    `store_id` BIGINT NOT NULL,
+    FOREIGN KEY (`group_id`) REFERENCES `groups` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`store_id`) REFERENCES `stores` (`id`) ON DELETE CASCADE,
+    UNIQUE KEY `uniq_item_per_store` (`group_id`, `store_id`, `name`)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS `price_history` (

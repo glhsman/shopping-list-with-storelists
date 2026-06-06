@@ -199,14 +199,14 @@ try {
                     FROM `shopping_list` sl
                     LEFT JOIN `items` i ON sl.item_id = i.id
                     WHERE sl.group_id = :group_id AND sl.is_checked = 0";
-            
+
             $params = ['group_id' => $groupId];
-            if ($storeId !== '') {
-                $sql .= " AND sl.store_id = :store_id";
-                $params['store_id'] = (int)$storeId;
-            } else {
-                $sql .= " AND sl.store_id IS NULL";
+            if ($storeId === '') {
+                echo json_encode(['success' => true, 'data' => []]);
+                break;
             }
+            $sql .= " AND sl.store_id = :store_id";
+            $params['store_id'] = (int)$storeId;
 
             $stmt = $pdo->prepare($sql);
             $stmt->execute($params);
@@ -231,16 +231,30 @@ try {
             break;
 
         case 'get_catalog':
-            $search = $_GET['search'] ?? '';
-            if ($search !== '') {
-                $stmt = $pdo->prepare("SELECT id, name, category, unit, last_known_price FROM `items` WHERE name LIKE :search ORDER BY name");
-                $stmt->execute(['search' => '%' . $search . '%']);
-            } else {
-                $stmt = $pdo->query("SELECT id, name, category, unit, last_known_price FROM `items` ORDER BY name");
+            $groupId = $_GET['group_id'] ?? '';
+            $storeId = $_GET['store_id'] ?? '';
+            $search  = $_GET['search'] ?? '';
+            if (empty($groupId)) {
+                echo json_encode(['success' => false, 'error' => 'Gruppen-ID fehlt']);
+                break;
             }
+            $sql = "SELECT id, name, category, unit, last_known_price, group_id, store_id FROM `items` WHERE group_id = :group_id";
+            $params = ['group_id' => $groupId];
+            if ($storeId !== '') {
+                $sql .= " AND store_id = :store_id";
+                $params['store_id'] = (int)$storeId;
+            }
+            if ($search !== '') {
+                $sql .= " AND name LIKE :search";
+                $params['search'] = '%' . $search . '%';
+            }
+            $sql .= " ORDER BY name";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
             $catalog = $stmt->fetchAll();
             foreach ($catalog as &$row) {
                 $row['id'] = (int)$row['id'];
+                $row['store_id'] = $row['store_id'] !== null ? (int)$row['store_id'] : null;
                 $row['last_known_price'] = (float)$row['last_known_price'];
             }
             echo json_encode(['success' => true, 'data' => $catalog]);
@@ -252,17 +266,40 @@ try {
             $unit = trim($input['unit'] ?? 'Stück');
             $category = trim($input['category'] ?? 'Allgemein');
             $price = (float)($input['last_known_price'] ?? 0.0);
+            $groupId = trim($input['group_id'] ?? '');
+            $storeId = (int)($input['store_id'] ?? 0);
             if (empty($name)) {
                 echo json_encode(['success' => false, 'error' => 'Name fehlt']);
                 break;
             }
-            if (mb_strlen($name, 'UTF-8') > 255 || mb_strlen($unit, 'UTF-8') > 50 || mb_strlen($category, 'UTF-8') > 100) {
+            if (empty($groupId) || $storeId <= 0) {
+                echo json_encode(['success' => false, 'error' => 'Gruppe und Filiale erforderlich']);
+                break;
+            }
+            if (mb_strlen($name, 'UTF-8') > 255 || mb_strlen($unit, 'UTF-8') > 50 || mb_strlen($category, 'UTF-8') > 100 || mb_strlen($groupId, 'UTF-8') > 100) {
                 echo json_encode(['success' => false, 'error' => 'Eingabewerte überschreiten Längenbegrenzung']);
                 break;
             }
-            $stmt = $pdo->prepare("INSERT INTO `items` (name, unit, category, last_known_price) VALUES (:name, :unit, :category, :price)");
-            $stmt->execute(['name' => $name, 'unit' => $unit, 'category' => $category, 'price' => $price]);
-            echo json_encode(['success' => true, 'id' => $pdo->lastInsertId()]);
+            $stmtCheck = $pdo->prepare("SELECT id FROM `stores` WHERE id = :store_id AND group_id = :group_id");
+            $stmtCheck->execute(['store_id' => $storeId, 'group_id' => $groupId]);
+            if (!$stmtCheck->fetch()) {
+                echo json_encode(['success' => false, 'error' => 'Filiale nicht gefunden oder gehört nicht zur Gruppe']);
+                break;
+            }
+            try {
+                $stmt = $pdo->prepare("INSERT INTO `items` (name, unit, category, last_known_price, group_id, store_id) VALUES (:name, :unit, :category, :price, :group_id, :store_id)");
+                $stmt->execute(['name' => $name, 'unit' => $unit, 'category' => $category, 'price' => $price, 'group_id' => $groupId, 'store_id' => $storeId]);
+                echo json_encode(['success' => true, 'id' => $pdo->lastInsertId()]);
+            } catch (PDOException $e) {
+                $errno = (int)($e->errorInfo[1] ?? 0);
+                if ($errno === 1062) {
+                    echo json_encode(['success' => false, 'error' => 'Artikel existiert bereits in dieser Filiale']);
+                } elseif ($errno === 1452) {
+                    echo json_encode(['success' => false, 'error' => 'Filiale oder Gruppe ungültig']);
+                } else {
+                    throw $e;
+                }
+            }
             break;
 
         case 'delete_item':
@@ -307,18 +344,28 @@ try {
             $input = getJsonInput();
             $itemId = (int)($input['item_id'] ?? 0);
             $groupId = trim($input['group_id'] ?? '');
-            $storeId = $input['store_id'] !== '' && $input['store_id'] !== null ? (int)$input['store_id'] : null;
+            $storeId = $input['store_id'] !== '' && $input['store_id'] !== null ? (int)$input['store_id'] : 0;
             $currentlyOnList = (bool)($input['currently_on_list'] ?? false);
 
             if ($itemId <= 0 || empty($groupId) || mb_strlen($groupId, 'UTF-8') > 100) {
                 echo json_encode(['success' => false, 'error' => 'Ungültige Parameter']);
                 break;
             }
+            if ($storeId <= 0) {
+                echo json_encode(['success' => false, 'error' => 'Bitte zuerst eine Filiale auswählen']);
+                break;
+            }
+            $stmtCheckStore = $pdo->prepare("SELECT id FROM `stores` WHERE id = :store_id AND group_id = :group_id");
+            $stmtCheckStore->execute(['store_id' => $storeId, 'group_id' => $groupId]);
+            if (!$stmtCheckStore->fetch()) {
+                echo json_encode(['success' => false, 'error' => 'Filiale nicht gefunden oder gehört nicht zur Gruppe']);
+                break;
+            }
 
             if ($currentlyOnList) {
                 // Von Einkaufsliste entfernen
-                $stmt = $pdo->prepare("DELETE FROM `shopping_list` WHERE item_id = :item_id AND group_id = :group_id AND is_checked = 0");
-                $stmt->execute(['item_id' => $itemId, 'group_id' => $groupId]);
+                $stmt = $pdo->prepare("DELETE FROM `shopping_list` WHERE item_id = :item_id AND group_id = :group_id AND store_id = :store_id AND is_checked = 0");
+                $stmt->execute(['item_id' => $itemId, 'group_id' => $groupId, 'store_id' => $storeId]);
             } else {
                 // Zu Einkaufsliste hinzufügen
                 $stmt = $pdo->prepare("INSERT INTO `shopping_list` (item_id, group_id, store_id) VALUES (:item_id, :group_id, :store_id)");

@@ -18,11 +18,11 @@
     <link rel="stylesheet" href="assets/css/fontawesome.min.css">
 
     <!-- Core Styles -->
-    <link rel="stylesheet" href="assets/css/style.css?v=1.5.7">
+    <link rel="stylesheet" href="assets/css/style.css?v=1.6.2">
 </head>
 <body>
     <div id="app">
-        <div id="version-display" class="version-tag">v1.5.7</div>
+        <div id="version-display" class="version-tag">v1.6.2</div>
         
         <!-- Update Notification -->
         <div id="update-banner" class="update-banner">
@@ -119,7 +119,7 @@
                     <!-- App Account Info -->
                     <div style="margin-top: 3rem; border-top: 1px solid var(--glass-border); padding-top: 2rem;">
                         <button onclick="localStorage.clear(); location.reload();" class="btn-secondary" style="width: 100%;">Abmelden / Gruppe wechseln</button>
-                        <p style="text-align: center; font-size: 0.7rem; color: var(--text-muted); margin-top: 1rem; opacity: 0.5;">Version 1.5.7 (Auto-Logout & MariaDB)</p>
+                        <p style="text-align: center; font-size: 0.7rem; color: var(--text-muted); margin-top: 1rem; opacity: 0.5;">Version 1.6.2 (Katalog+Liste filialbezogen, NULL-Store-Schutz)</p>
                     </div>
 
                     <!-- Legal Links -->
@@ -261,7 +261,7 @@
     </div>
 
     <!-- App Logic -->
-    <script src="assets/js/app.js?v=1.5.7" type="module"></script>
+    <script src="assets/js/app.js?v=1.6.2" type="module"></script>
     <script>
         // PWA Service Worker Registration with Update Logic
         if ('serviceWorker' in navigator) {
@@ -277,7 +277,7 @@
                         
                         reg.addEventListener('updatefound', () => {
                              const newWorker = reg.installing;
-                             const CACHE_NAME = 'einkaufs-v1.5.7';
+                             const CACHE_NAME = 'einkaufs-v1.6.2';
                             newWorker.addEventListener('statechange', () => {
                                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                                     document.getElementById('update-banner').classList.add('show');
